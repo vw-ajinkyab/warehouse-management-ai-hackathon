@@ -2,12 +2,47 @@
 
 Full-stack warehouse control tower that ingests the supplied Excel workbook, mirrors it into SQLite, detects operational anomalies, and supports AI-assisted triage, investigation, approvals, and workbook actions.
 
+This is the single source of truth for architecture, setup, and the API
+contract. [`frontend/README.md`](frontend/README.md) only covers
+Next.js-specific dev commands — there is intentionally no separate
+backend README to avoid duplicating this document.
+
 ## Stack
 
 - Backend: Node.js 24 native TypeScript HTTP server, SQLite, and ExcelJS
 - Frontend: Next.js 16, React 19, Tailwind CSS 4, Base UI, and Lucide icons
 - AI: VW Group LLMaaS with OAuth token caching and deterministic fallback behavior
 - Data: `data/Warehouse_AI_Hackathon_Synthetic_Dataset_FINAL.xlsx`
+
+## Repo layout
+
+```
+backend/                Node.js 24 native TypeScript HTTP server
+  src/
+    server.ts            entry point
+    api.ts                route handlers (no Express)
+    db.ts                 SQLite schema + audit-log helpers
+    config.ts             env-driven settings
+    workbook/              excelReader.ts + schemaValidator.ts
+    services/
+      ingestionService.ts   workbook -> SQLite mirror tables
+      ruleEngine.ts          5 deterministic detection rules
+      cascadeService.ts      batch triage + auto-fix + solution generation
+      llmService.ts          LLMaaS OAuth + chat completions
+    scripts/inspectWorkbook.ts
+
+frontend/               Next.js 16 + React 19 + Tailwind (Turbopack)
+  app/                   route groups: /, /anomalies, /approvals, /dispatch-flow
+  components/            control-tower, anomaly-*, approvals, vendors, warehouse-assistant, etc.
+  lib/workbook-api.ts     typed client actually used by the app (NEXT_PUBLIC_API_URL)
+
+data/                    authoritative xlsx workbook
+docker-compose.yml       backend + frontend containers
+```
+
+> `frontend/lib/api.ts` and `frontend/lib/types.ts` are unused leftovers
+> from an earlier FastAPI-based scaffold — nothing imports them. Safe to
+> remove; the real client is `frontend/lib/workbook-api.ts`.
 
 ## Prerequisites
 
