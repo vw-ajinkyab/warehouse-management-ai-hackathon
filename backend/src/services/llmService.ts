@@ -20,6 +20,19 @@ export type LlmAnalysis = {
   model: string;
 };
 
+type AssistantQuestionContext = {
+  question: string;
+  deterministicReply: string;
+  cards: Array<{ label: string; value: string | number }>;
+  rows: Array<Record<string, unknown>>;
+  tables: string[];
+};
+
+export type AssistantLlmAnswer = {
+  reply: string;
+  model: string;
+};
+
 export type TriageInput = {
   id: number;
   type: string;
@@ -94,7 +107,6 @@ const getAccessToken = async () => {
   if (!response.ok) throw new Error(`LLM identity token request failed with HTTP ${response.status}.`);
   const payload = await response.json() as { access_token?: string; expires_in?: number };
   if (!payload.access_token) throw new Error('LLM identity provider returned no access token.');
-  // Refresh 60s before actual expiry (default 5 min) to avoid using a stale token mid-request.
   const ttlMs = Math.max((Number(payload.expires_in) || 300) - 60, 30) * 1000;
   cachedToken = { value: payload.access_token, expiresAt: Date.now() + ttlMs };
   return payload.access_token;
@@ -144,9 +156,6 @@ const callChatCompletion = async (
   }
 };
 
-/**
- * LLMaaS 1 (on-demand deep dive) — used by the Anomaly Investigation page.
- */
 export const analyzeAnomalyWithLlm = async (anomaly: AnomalyContext): Promise<LlmAnalysis> => {
   const parsed = await callChatCompletion(
     'You are a warehouse operations analyst. Return only valid JSON with keys summary, rootCause, businessImpact, recommendedAction, confidence. Use only the supplied evidence. Do not invent quantities, dates, vendors, or materials.',
@@ -164,9 +173,6 @@ export const analyzeAnomalyWithLlm = async (anomaly: AnomalyContext): Promise<Ll
   };
 };
 
-/**
- * LLMaaS 2 (batch triage) — judges auto-fix eligibility & risk for a batch of anomalies in one call.
- */
 export const triageAnomaliesWithLlm = async (anomalies: TriageInput[]): Promise<TriageResult[]> => {
   const parsed = await callChatCompletion(
     [
@@ -195,9 +201,6 @@ export const triageAnomaliesWithLlm = async (anomalies: TriageInput[]): Promise<
   }).filter((row) => Number.isInteger(row.anomalyId));
 };
 
-/**
- * LLMaaS 3 (solution generator) — produces a rich, multi-option recommendation for one anomaly.
- */
 export const generateSolutionWithLlm = async (
   anomaly: TriageInput,
   triage: Pick<TriageResult, 'riskLevel' | 'reasoning' | 'approvalUrgency'>,
@@ -235,4 +238,14 @@ export const generateSolutionWithLlm = async (
     approvalChecklist: Array.isArray(parsed.approvalChecklist) ? parsed.approvalChecklist.map(String) : [],
     model: appConfig.llmModel,
   };
+};
+
+export const answerAssistantQuestionWithLlm = async (context: AssistantQuestionContext): Promise<AssistantLlmAnswer> => {
+  const parsed = await callChatCompletion(
+    'You are LogiMind Assistant for warehouse operators. Use only the supplied data. Return only valid JSON with key reply. Be concise, practical, and mention when the evidence is limited. Do not invent materials, quantities, vendors, dates, or actions.',
+    { task: 'Answer the operator question using the deterministic system answer and row evidence.', context },
+    0.2,
+  ) as { reply?: unknown };
+
+  return { reply: String(parsed.reply ?? context.deterministicReply), model: appConfig.llmModel };
 };
