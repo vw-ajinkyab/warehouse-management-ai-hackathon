@@ -326,7 +326,7 @@ export function DataSourcesPage() {
                 Monitoring active
               </div>
               <div className="flex size-8 items-center justify-center rounded-full bg-[#d8f36b] text-xs font-bold text-[#17211f]">
-                AS
+                VW
               </div>
             </div>
           </header>
